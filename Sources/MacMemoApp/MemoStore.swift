@@ -12,6 +12,13 @@ struct MemoItem: Identifiable, Equatable {
     var lastSavedAt: Date?
 }
 
+struct MemoLinkMatch: Identifiable, Equatable {
+    let title: String
+    let memoID: MemoItem.ID?
+
+    var id: String { title.lowercased() }
+}
+
 enum MemoSortOption: String, CaseIterable, Identifiable {
     case newestFirst
     case oldestFirst
@@ -130,7 +137,7 @@ final class MemoStore {
     private static let themeDefaultsKey = "MacMemoApp.theme"
     private static let lineStyleDefaultsKey = "MacMemoApp.lineStyle"
 
-    init(fileManager: FileManager = .default) {
+    init(initialSelectedMemoTitle: String? = nil, fileManager: FileManager = .default) {
         self.fileManager = fileManager
         let initialDirectoryURL = Self.loadSavedDirectoryURL(fileManager: fileManager)
         saveDirectoryURL = initialDirectoryURL
@@ -147,7 +154,11 @@ final class MemoStore {
             lastSavedAt = initialMemo.lastSavedAt
         } else {
             memos = loadedMemos
-            selectedMemoID = Self.initialSelectedMemoID(from: loadedMemos, sortOption: sortOption)
+            selectedMemoID = Self.initialSelectedMemoID(
+                from: loadedMemos,
+                sortOption: sortOption,
+                preferredTitle: initialSelectedMemoTitle
+            )
             lastSavedAt = selectedMemo?.lastSavedAt
         }
     }
@@ -226,6 +237,16 @@ final class MemoStore {
         selectedMemo != nil
     }
 
+    var selectedMemoLinks: [MemoLinkMatch] {
+        guard let selectedMemo else { return [] }
+        let titles = Self.extractLinkedTitles(from: selectedMemo.text)
+
+        return titles.map { title in
+            let matchedMemo = memos.first { $0.title.localizedCaseInsensitiveCompare(title) == .orderedSame }
+            return MemoLinkMatch(title: title, memoID: matchedMemo?.id)
+        }
+    }
+
     func selectMemo(id: MemoItem.ID?) {
         selectedMemoID = id
         lastSavedAt = selectedMemo?.lastSavedAt
@@ -247,6 +268,14 @@ final class MemoStore {
         memos.append(memo)
         selectMemo(id: memo.id)
         saveSelectedMemo()
+    }
+
+    func selectMemo(title: String) {
+        guard let memo = memos.first(where: { $0.title.localizedCaseInsensitiveCompare(title) == .orderedSame }) else {
+            return
+        }
+
+        selectMemo(id: memo.id)
     }
 
     func deleteMemo(id: MemoItem.ID) {
@@ -457,7 +486,16 @@ final class MemoStore {
         return cleaned.isEmpty ? "memo" : cleaned
     }
 
-    private static func initialSelectedMemoID(from memos: [MemoItem], sortOption: MemoSortOption) -> MemoItem.ID? {
+    private static func initialSelectedMemoID(
+        from memos: [MemoItem],
+        sortOption: MemoSortOption,
+        preferredTitle: String?
+    ) -> MemoItem.ID? {
+        if let preferredTitle,
+           let matchedMemo = memos.first(where: { $0.title.localizedCaseInsensitiveCompare(preferredTitle) == .orderedSame }) {
+            return matchedMemo.id
+        }
+
         switch sortOption {
         case .newestFirst:
             return memos.max(by: { $0.createdAt < $1.createdAt })?.id
@@ -472,6 +510,35 @@ final class MemoStore {
                 $0.title.localizedCaseInsensitiveCompare($1.title) == .orderedDescending
             }.first?.id
         }
+    }
+
+    private static func extractLinkedTitles(from text: String) -> [String] {
+        let pattern = #"\[\[([^\[\]]+)\]\]"#
+        guard let regex = try? NSRegularExpression(pattern: pattern) else {
+            return []
+        }
+
+        let range = NSRange(text.startIndex..., in: text)
+        let matches = regex.matches(in: text, range: range)
+        var seenTitles = Set<String>()
+        var orderedTitles: [String] = []
+
+        for match in matches {
+            guard
+                let titleRange = Range(match.range(at: 1), in: text)
+            else {
+                continue
+            }
+
+            let title = text[titleRange].trimmingCharacters(in: .whitespacesAndNewlines)
+            guard !title.isEmpty else { continue }
+
+            let normalizedTitle = title.lowercased()
+            guard seenTitles.insert(normalizedTitle).inserted else { continue }
+            orderedTitles.append(title)
+        }
+
+        return orderedTitles
     }
 
     private static func loadTheme() -> MemoTheme {

@@ -3,6 +3,7 @@ import SwiftUI
 struct ContentView: View {
     @Bindable var store: MemoStore
     @ObservedObject var updater: AppUpdater
+    @Environment(\.openWindow) private var openWindow
     @FocusState private var focusedField: Field?
     @State private var showingSettings = false
     @State private var hoveredMemoID: MemoItem.ID?
@@ -189,6 +190,10 @@ struct ContentView: View {
                         .lineLimit(2)
                 }
 
+                if !store.selectedMemoLinks.isEmpty {
+                    memoLinks
+                }
+
                 TextEditor(text: $store.selectedMemoText)
                     .font(.system(size: 16))
                     .padding(.horizontal, 16)
@@ -229,6 +234,25 @@ struct ContentView: View {
         )
     }
 
+    private var memoLinks: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Text("Linked memos")
+                .font(.subheadline.weight(.medium))
+
+            FlowLayout(horizontalSpacing: 8, verticalSpacing: 8) {
+                ForEach(store.selectedMemoLinks) { link in
+                    Button {
+                        openMemoLink(link)
+                    } label: {
+                        Label(link.title, systemImage: link.memoID == nil ? "exclamationmark.circle" : "arrow.up.forward.square")
+                    }
+                    .buttonStyle(.bordered)
+                    .disabled(link.memoID == nil)
+                }
+            }
+        }
+    }
+
     private func memoPreview(_ text: String) -> String {
         let collapsed = text
             .split(whereSeparator: \.isNewline)
@@ -237,6 +261,11 @@ struct ContentView: View {
             .trimmingCharacters(in: .whitespacesAndNewlines)
 
         return collapsed.isEmpty ? "Empty memo" : collapsed
+    }
+
+    private func openMemoLink(_ link: MemoLinkMatch) {
+        guard link.memoID != nil else { return }
+        openWindow(value: MemoWindowTarget(memoTitle: link.title))
     }
 }
 
@@ -268,6 +297,61 @@ private struct MemoEditorBackground: View {
                     )
                 }
             }
+        }
+    }
+}
+
+private struct FlowLayout: Layout {
+    let horizontalSpacing: CGFloat
+    let verticalSpacing: CGFloat
+
+    func sizeThatFits(proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) -> CGSize {
+        let maxWidth = proposal.width ?? .infinity
+        var currentX: CGFloat = 0
+        var currentY: CGFloat = 0
+        var rowHeight: CGFloat = 0
+        var maxRowWidth: CGFloat = 0
+
+        for subview in subviews {
+            let size = subview.sizeThatFits(.unspecified)
+            let shouldWrap = currentX > 0 && currentX + size.width > maxWidth
+
+            if shouldWrap {
+                currentX = 0
+                currentY += rowHeight + verticalSpacing
+                rowHeight = 0
+            }
+
+            maxRowWidth = max(maxRowWidth, currentX + size.width)
+            rowHeight = max(rowHeight, size.height)
+            currentX += size.width + horizontalSpacing
+        }
+
+        return CGSize(width: maxRowWidth, height: currentY + rowHeight)
+    }
+
+    func placeSubviews(in bounds: CGRect, proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) {
+        var currentX = bounds.minX
+        var currentY = bounds.minY
+        var rowHeight: CGFloat = 0
+
+        for subview in subviews {
+            let size = subview.sizeThatFits(.unspecified)
+            let shouldWrap = currentX > bounds.minX && currentX + size.width > bounds.maxX
+
+            if shouldWrap {
+                currentX = bounds.minX
+                currentY += rowHeight + verticalSpacing
+                rowHeight = 0
+            }
+
+            subview.place(
+                at: CGPoint(x: currentX, y: currentY),
+                proposal: ProposedViewSize(width: size.width, height: size.height)
+            )
+
+            rowHeight = max(rowHeight, size.height)
+            currentX += size.width + horizontalSpacing
         }
     }
 }
