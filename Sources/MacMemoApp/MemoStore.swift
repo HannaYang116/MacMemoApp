@@ -1,13 +1,112 @@
 import AppKit
 import Foundation
 import Observation
+import SwiftUI
 
 struct MemoItem: Identifiable, Equatable {
     let id: UUID
     var title: String
     var text: String
     var fileName: String
+    var createdAt: Date
     var lastSavedAt: Date?
+}
+
+enum MemoSortOption: String, CaseIterable, Identifiable {
+    case newestFirst
+    case oldestFirst
+    case titleAscending
+    case titleDescending
+
+    var id: String { rawValue }
+
+    var label: String {
+        switch self {
+        case .newestFirst:
+            return "Latest"
+        case .oldestFirst:
+            return "Oldest"
+        case .titleAscending:
+            return "Name A-Z"
+        case .titleDescending:
+            return "Name Z-A"
+        }
+    }
+}
+
+enum MemoTheme: String, CaseIterable, Identifiable {
+    case pink
+    case blue
+    case yellow
+
+    var id: String { rawValue }
+
+    var label: String {
+        rawValue.capitalized
+    }
+
+    var tint: Color {
+        switch self {
+        case .pink:
+            return Color(red: 0.84, green: 0.39, blue: 0.61)
+        case .blue:
+            return Color(red: 0.34, green: 0.55, blue: 0.90)
+        case .yellow:
+            return Color(red: 0.88, green: 0.71, blue: 0.24)
+        }
+    }
+
+    var accent: Color {
+        switch self {
+        case .pink:
+            return Color(red: 0.98, green: 0.90, blue: 0.94)
+        case .blue:
+            return Color(red: 0.91, green: 0.95, blue: 0.99)
+        case .yellow:
+            return Color(red: 0.99, green: 0.96, blue: 0.86)
+        }
+    }
+
+    var background: Color {
+        switch self {
+        case .pink:
+            return Color(red: 0.99, green: 0.96, blue: 0.97)
+        case .blue:
+            return Color(red: 0.95, green: 0.98, blue: 1.00)
+        case .yellow:
+            return Color(red: 1.00, green: 0.99, blue: 0.92)
+        }
+    }
+
+    var secondaryBackground: Color {
+        switch self {
+        case .pink:
+            return Color(red: 0.96, green: 0.89, blue: 0.92)
+        case .blue:
+            return Color(red: 0.87, green: 0.93, blue: 0.99)
+        case .yellow:
+            return Color(red: 0.97, green: 0.93, blue: 0.79)
+        }
+    }
+}
+
+enum MemoLineStyle: String, CaseIterable, Identifiable {
+    case none
+    case regular
+    case thin
+
+    var id: String { rawValue }
+
+    var label: String {
+        switch self {
+        case .none:
+            return "No line"
+        case .regular:
+            return "Basic line"
+        case .thin:
+            return "Thin line"
+        }
+    }
 }
 
 @MainActor
@@ -17,6 +116,10 @@ final class MemoStore {
     var selectedMemoID: MemoItem.ID?
     var lastSavedAt: Date?
     var errorMessage: String?
+    var searchText: String
+    var sortOption: MemoSortOption
+    var theme: MemoTheme
+    var lineStyle: MemoLineStyle
 
     private let fileManager: FileManager
     private var saveDirectoryURL: URL
@@ -24,11 +127,17 @@ final class MemoStore {
 
     private static let saveDirectoryDefaultsKey = "MacMemoApp.saveDirectoryPath"
     private static let legacySavePathDefaultsKey = "MacMemoApp.savePath"
+    private static let themeDefaultsKey = "MacMemoApp.theme"
+    private static let lineStyleDefaultsKey = "MacMemoApp.lineStyle"
 
     init(fileManager: FileManager = .default) {
         self.fileManager = fileManager
         let initialDirectoryURL = Self.loadSavedDirectoryURL(fileManager: fileManager)
         saveDirectoryURL = initialDirectoryURL
+        searchText = ""
+        sortOption = .newestFirst
+        theme = Self.loadTheme()
+        lineStyle = Self.loadLineStyle()
 
         let loadedMemos = Self.loadMemos(from: initialDirectoryURL, fileManager: fileManager)
         if loadedMemos.isEmpty {
@@ -38,8 +147,48 @@ final class MemoStore {
             lastSavedAt = initialMemo.lastSavedAt
         } else {
             memos = loadedMemos
-            selectedMemoID = loadedMemos.first?.id
-            lastSavedAt = loadedMemos.first?.lastSavedAt
+            selectedMemoID = Self.initialSelectedMemoID(from: loadedMemos, sortOption: sortOption)
+            lastSavedAt = selectedMemo?.lastSavedAt
+        }
+    }
+
+    var filteredSortedMemos: [MemoItem] {
+        let trimmed = searchText.trimmingCharacters(in: .whitespacesAndNewlines)
+        let filtered = trimmed.isEmpty
+            ? memos
+            : memos.filter { $0.title.localizedCaseInsensitiveContains(trimmed) }
+
+        switch sortOption {
+        case .newestFirst:
+            return filtered.sorted {
+                if $0.createdAt == $1.createdAt {
+                    return $0.title.localizedCaseInsensitiveCompare($1.title) == .orderedAscending
+                }
+                return $0.createdAt > $1.createdAt
+            }
+        case .oldestFirst:
+            return filtered.sorted {
+                if $0.createdAt == $1.createdAt {
+                    return $0.title.localizedCaseInsensitiveCompare($1.title) == .orderedAscending
+                }
+                return $0.createdAt < $1.createdAt
+            }
+        case .titleAscending:
+            return filtered.sorted {
+                let comparison = $0.title.localizedCaseInsensitiveCompare($1.title)
+                if comparison == .orderedSame {
+                    return $0.createdAt > $1.createdAt
+                }
+                return comparison == .orderedAscending
+            }
+        case .titleDescending:
+            return filtered.sorted {
+                let comparison = $0.title.localizedCaseInsensitiveCompare($1.title)
+                if comparison == .orderedSame {
+                    return $0.createdAt > $1.createdAt
+                }
+                return comparison == .orderedDescending
+            }
         }
     }
 
@@ -57,10 +206,6 @@ final class MemoStore {
 
     var saveLocation: String {
         saveDirectoryURL.path
-    }
-
-    var saveLocationDisplayName: String {
-        saveDirectoryURL.lastPathComponent
     }
 
     var selectedMemoTitle: String {
@@ -90,16 +235,43 @@ final class MemoStore {
     func addMemo() {
         let title = nextDefaultMemoTitle()
         let fileName = makeUniqueFileName(from: title, excluding: nil)
+        let now = Date()
         let memo = MemoItem(
             id: UUID(),
             title: title,
             text: "",
             fileName: fileName,
+            createdAt: now,
             lastSavedAt: nil
         )
         memos.append(memo)
         selectMemo(id: memo.id)
         saveSelectedMemo()
+    }
+
+    func deleteMemo(id: MemoItem.ID) {
+        guard let index = memos.firstIndex(where: { $0.id == id }) else { return }
+
+        do {
+            let memo = memos[index]
+            let fileURL = fileURL(for: memo.fileName)
+            if fileManager.fileExists(atPath: fileURL.path) {
+                try fileManager.removeItem(at: fileURL)
+            }
+
+            memos.remove(at: index)
+
+            if memos.isEmpty {
+                addMemo()
+            } else if selectedMemoID == id {
+                let nextIndex = min(index, memos.count - 1)
+                selectMemo(id: memos[nextIndex].id)
+            }
+
+            errorMessage = nil
+        } catch {
+            errorMessage = "Delete failed: \(error.localizedDescription)"
+        }
     }
 
     func chooseSaveLocation() {
@@ -117,6 +289,16 @@ final class MemoStore {
         }
 
         changeSaveDirectory(to: selectedURL)
+    }
+
+    func setTheme(_ theme: MemoTheme) {
+        self.theme = theme
+        UserDefaults.standard.set(theme.rawValue, forKey: Self.themeDefaultsKey)
+    }
+
+    func setLineStyle(_ lineStyle: MemoLineStyle) {
+        self.lineStyle = lineStyle
+        UserDefaults.standard.set(lineStyle.rawValue, forKey: Self.lineStyleDefaultsKey)
     }
 
     func scheduleSaveSelected() {
@@ -275,6 +457,33 @@ final class MemoStore {
         return cleaned.isEmpty ? "memo" : cleaned
     }
 
+    private static func initialSelectedMemoID(from memos: [MemoItem], sortOption: MemoSortOption) -> MemoItem.ID? {
+        switch sortOption {
+        case .newestFirst:
+            return memos.max(by: { $0.createdAt < $1.createdAt })?.id
+        case .oldestFirst:
+            return memos.min(by: { $0.createdAt < $1.createdAt })?.id
+        case .titleAscending:
+            return memos.sorted {
+                $0.title.localizedCaseInsensitiveCompare($1.title) == .orderedAscending
+            }.first?.id
+        case .titleDescending:
+            return memos.sorted {
+                $0.title.localizedCaseInsensitiveCompare($1.title) == .orderedDescending
+            }.first?.id
+        }
+    }
+
+    private static func loadTheme() -> MemoTheme {
+        let rawValue = UserDefaults.standard.string(forKey: themeDefaultsKey) ?? MemoTheme.pink.rawValue
+        return MemoTheme(rawValue: rawValue) ?? .pink
+    }
+
+    private static func loadLineStyle() -> MemoLineStyle {
+        let rawValue = UserDefaults.standard.string(forKey: lineStyleDefaultsKey) ?? MemoLineStyle.none.rawValue
+        return MemoLineStyle(rawValue: rawValue) ?? .none
+    }
+
     private static func loadSavedDirectoryURL(fileManager: FileManager) -> URL {
         if let savedPath = UserDefaults.standard.string(forKey: saveDirectoryDefaultsKey), !savedPath.isEmpty {
             return URL(fileURLWithPath: savedPath, isDirectory: true)
@@ -290,7 +499,7 @@ final class MemoStore {
     private static func loadMemos(from directoryURL: URL, fileManager: FileManager) -> [MemoItem] {
         guard let urls = try? fileManager.contentsOfDirectory(
             at: directoryURL,
-            includingPropertiesForKeys: [.contentModificationDateKey],
+            includingPropertiesForKeys: [.contentModificationDateKey, .creationDateKey],
             options: [.skipsHiddenFiles]
         ) else {
             return []
@@ -298,16 +507,18 @@ final class MemoStore {
 
         return urls
             .filter { $0.pathExtension.lowercased() == "txt" }
-            .sorted { $0.lastPathComponent.localizedStandardCompare($1.lastPathComponent) == .orderedAscending }
             .map { url in
                 let text = (try? String(contentsOf: url, encoding: .utf8)) ?? ""
-                let modifiedAt = (try? url.resourceValues(forKeys: [.contentModificationDateKey]))?.contentModificationDate
+                let values = try? url.resourceValues(forKeys: [.contentModificationDateKey, .creationDateKey])
+                let createdAt = values?.creationDate ?? values?.contentModificationDate ?? Date()
+                let modifiedAt = values?.contentModificationDate
                 let title = url.deletingPathExtension().lastPathComponent
                 return MemoItem(
                     id: UUID(),
                     title: title,
                     text: text,
                     fileName: url.lastPathComponent,
+                    createdAt: createdAt,
                     lastSavedAt: modifiedAt
                 )
             }
@@ -316,13 +527,16 @@ final class MemoStore {
     private static func makeInitialMemo(in directoryURL: URL, fileManager: FileManager) -> MemoItem {
         let legacyFileURL = directoryURL.appendingPathComponent("memo.txt")
         let legacyText = (try? String(contentsOf: legacyFileURL, encoding: .utf8)) ?? ""
-        let legacyDate = (try? legacyFileURL.resourceValues(forKeys: [.contentModificationDateKey]))?.contentModificationDate
+        let values = try? legacyFileURL.resourceValues(forKeys: [.contentModificationDateKey, .creationDateKey])
+        let createdAt = values?.creationDate ?? values?.contentModificationDate ?? Date()
+        let legacyDate = values?.contentModificationDate
 
         return MemoItem(
             id: UUID(),
             title: "memo1",
             text: legacyText,
             fileName: "memo1.txt",
+            createdAt: createdAt,
             lastSavedAt: legacyDate
         )
     }
@@ -340,24 +554,31 @@ final class MemoStore {
 extension MemoStore {
     static var preview: MemoStore {
         let store = MemoStore()
+        let now = Date()
         store.memos = [
+            MemoItem(
+                id: UUID(),
+                title: "memo2",
+                text: "Blue theme with named sorting would look nice here.",
+                fileName: "memo2.txt",
+                createdAt: now.addingTimeInterval(-600),
+                lastSavedAt: now.addingTimeInterval(-300)
+            ),
             MemoItem(
                 id: UUID(),
                 title: "memo1",
                 text: "Welcome to MacMemoApp.\n\nYou can now create more than one memo.",
                 fileName: "memo1.txt",
-                lastSavedAt: Date()
-            ),
-            MemoItem(
-                id: UUID(),
-                title: "Ideas",
-                text: "1. Add search\n2. Add folders\n3. Add tags",
-                fileName: "Ideas.txt",
-                lastSavedAt: Date()
+                createdAt: now.addingTimeInterval(-1200),
+                lastSavedAt: now.addingTimeInterval(-900)
             )
         ]
         store.selectedMemoID = store.memos.first?.id
-        store.lastSavedAt = Date()
+        store.lastSavedAt = now
+        store.searchText = ""
+        store.sortOption = .newestFirst
+        store.theme = .pink
+        store.lineStyle = .regular
         return store
     }
 }

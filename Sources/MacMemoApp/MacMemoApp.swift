@@ -20,7 +20,7 @@ struct MacMemoApp: App {
         }
 
         Settings {
-            SettingsView()
+            SettingsView(store: store)
         }
     }
 }
