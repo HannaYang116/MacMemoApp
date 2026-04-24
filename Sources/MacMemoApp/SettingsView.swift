@@ -2,6 +2,7 @@ import SwiftUI
 
 struct SettingsView: View {
     @Bindable var store: MemoStore
+    @ObservedObject var updater: AppUpdater
     @Environment(\.dismiss) private var dismiss
 
     var body: some View {
@@ -52,6 +53,22 @@ struct SettingsView: View {
                         )
                     }
                 }
+            }
+
+            VStack(alignment: .leading, spacing: 10) {
+                Text("Updates")
+                    .font(.headline)
+
+                Button("Check for Updates") {
+                    updater.checkForUpdates()
+                }
+                .buttonStyle(.borderedProminent)
+                .tint(store.theme.tint)
+                .disabled(!updater.canCheckForUpdates)
+
+                Text(updater.configurationMessage)
+                    .font(.subheadline)
+                    .foregroundStyle(.secondary)
             }
 
             Text("Your theme and line style are applied to the whole memo app immediately.")

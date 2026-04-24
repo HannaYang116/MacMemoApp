@@ -1,4 +1,5 @@
 .build
+.xcodebuild
 .DS_Store
 Package.resolved
 DerivedData/

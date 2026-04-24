@@ -2,6 +2,12 @@
 
 `MacMemoApp` is a lightweight macOS memo app built with SwiftUI.
 
+## Open In Xcode
+
+```bash
+open MacMemoApp.xcodeproj
+```
+
 ## Features
 
 - Single-window memo editor
@@ -51,3 +57,26 @@ git push origin v1.0.0
 Or run the `Build Release` workflow manually from the GitHub Actions tab and enter a tag like `v1.0.0`.
 
 The downloadable file will appear in the repository `Releases` section.
+
+## Sparkle Auto Updates
+
+Sparkle is now wired into the Xcode app target.
+
+- Appcast feed URL: `https://hannayang116.github.io/MacMemoApp/updates/appcast.xml`
+- Public EdDSA key is stored in [Info.plist](/Users/apple/Documents/New%20project/MacMemoApp/Info.plist)
+- Update controller lives in [AppUpdater.swift](/Users/apple/Documents/New%20project/Sources/MacMemoApp/AppUpdater.swift)
+
+To prepare a Sparkle release locally:
+
+```bash
+./scripts/prepare_sparkle_release.sh 1.0.0
+```
+
+This will:
+
+- build the app with version metadata
+- create `dist/MacMemoApp.zip`
+- copy a versioned archive into `docs/updates/`
+- generate `docs/updates/appcast.xml`
+
+For GitHub Actions releases, add a repository secret named `SPARKLE_PRIVATE_KEY` containing your exported Sparkle private key. Without this secret, appcast signing will not work in CI.

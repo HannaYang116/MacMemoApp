@@ -3,79 +3,27 @@ set -euo pipefail
 
 ROOT_DIR="$(cd "$(dirname "$0")/.." && pwd)"
 APP_NAME="MacMemoApp"
-BUILD_DIR="$ROOT_DIR/.build/release"
 DIST_DIR="$ROOT_DIR/dist"
+DERIVED_DATA_DIR="$ROOT_DIR/.xcodebuild"
 APP_DIR="$DIST_DIR/$APP_NAME.app"
-CONTENTS_DIR="$APP_DIR/Contents"
-MACOS_DIR="$CONTENTS_DIR/MacOS"
-RESOURCES_DIR="$CONTENTS_DIR/Resources"
-INFO_PLIST="$CONTENTS_DIR/Info.plist"
-EXECUTABLE_PATH="$BUILD_DIR/$APP_NAME"
-ICON_SOURCE="$ROOT_DIR/Sources/img/3289b587-5f59-45cb-b8c7-d9e948f0d6fc.png"
-ICONSET_DIR="$DIST_DIR/AppIcon.iconset"
-ICNS_PATH="$RESOURCES_DIR/AppIcon.icns"
+BUILT_APP_DIR="$DERIVED_DATA_DIR/Build/Products/Release/$APP_NAME.app"
+MARKETING_VERSION="${MARKETING_VERSION:-1.0.0}"
+CURRENT_PROJECT_VERSION="${CURRENT_PROJECT_VERSION:-100}"
 
 mkdir -p "$DIST_DIR"
 
-swift build -c release --package-path "$ROOT_DIR"
+xcodebuild \
+  -project "$ROOT_DIR/MacMemoApp.xcodeproj" \
+  -scheme "$APP_NAME" \
+  -configuration Release \
+  -derivedDataPath "$DERIVED_DATA_DIR" \
+  CODE_SIGNING_ALLOWED=NO \
+  MARKETING_VERSION="$MARKETING_VERSION" \
+  CURRENT_PROJECT_VERSION="$CURRENT_PROJECT_VERSION" \
+  build
 
 rm -rf "$APP_DIR"
-mkdir -p "$MACOS_DIR" "$RESOURCES_DIR"
-
-rm -rf "$ICONSET_DIR"
-mkdir -p "$ICONSET_DIR"
-
-sips -z 16 16 "$ICON_SOURCE" --out "$ICONSET_DIR/icon_16x16.png" >/dev/null
-sips -z 32 32 "$ICON_SOURCE" --out "$ICONSET_DIR/icon_16x16@2x.png" >/dev/null
-sips -z 32 32 "$ICON_SOURCE" --out "$ICONSET_DIR/icon_32x32.png" >/dev/null
-sips -z 64 64 "$ICON_SOURCE" --out "$ICONSET_DIR/icon_32x32@2x.png" >/dev/null
-sips -z 128 128 "$ICON_SOURCE" --out "$ICONSET_DIR/icon_128x128.png" >/dev/null
-sips -z 256 256 "$ICON_SOURCE" --out "$ICONSET_DIR/icon_128x128@2x.png" >/dev/null
-sips -z 256 256 "$ICON_SOURCE" --out "$ICONSET_DIR/icon_256x256.png" >/dev/null
-sips -z 512 512 "$ICON_SOURCE" --out "$ICONSET_DIR/icon_256x256@2x.png" >/dev/null
-sips -z 512 512 "$ICON_SOURCE" --out "$ICONSET_DIR/icon_512x512.png" >/dev/null
-sips -z 1024 1024 "$ICON_SOURCE" --out "$ICONSET_DIR/icon_512x512@2x.png" >/dev/null
-
-iconutil -c icns "$ICONSET_DIR" -o "$ICNS_PATH"
-rm -rf "$ICONSET_DIR"
-
-cp "$EXECUTABLE_PATH" "$MACOS_DIR/$APP_NAME"
-chmod +x "$MACOS_DIR/$APP_NAME"
-
-cat > "$INFO_PLIST" <<'PLIST'
-<?xml version="1.0" encoding="UTF-8"?>
-<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "https://www.apple.com/DTDs/PropertyList-1.0.dtd">
-<plist version="1.0">
-<dict>
-    <key>CFBundleDevelopmentRegion</key>
-    <string>en</string>
-    <key>CFBundleDisplayName</key>
-    <string>MacMemoApp</string>
-    <key>CFBundleExecutable</key>
-    <string>MacMemoApp</string>
-    <key>CFBundleIdentifier</key>
-    <string>com.hannayang.macmemoapp</string>
-    <key>CFBundleInfoDictionaryVersion</key>
-    <string>6.0</string>
-    <key>CFBundleIconFile</key>
-    <string>AppIcon</string>
-    <key>CFBundleName</key>
-    <string>MacMemoApp</string>
-    <key>CFBundlePackageType</key>
-    <string>APPL</string>
-    <key>CFBundleShortVersionString</key>
-    <string>1.0</string>
-    <key>CFBundleVersion</key>
-    <string>1</string>
-    <key>LSMinimumSystemVersion</key>
-    <string>14.0</string>
-    <key>NSHighResolutionCapable</key>
-    <true/>
-</dict>
-</plist>
-PLIST
-
-codesign --force --deep --sign - "$APP_DIR" >/dev/null
+cp -R "$BUILT_APP_DIR" "$APP_DIR"
 
 echo "Created app bundle at:"
 echo "$APP_DIR"

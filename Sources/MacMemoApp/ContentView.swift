@@ -2,6 +2,7 @@ import SwiftUI
 
 struct ContentView: View {
     @Bindable var store: MemoStore
+    @ObservedObject var updater: AppUpdater
     @FocusState private var focusedField: Field?
     @State private var showingSettings = false
     @State private var hoveredMemoID: MemoItem.ID?
@@ -21,7 +22,7 @@ struct ContentView: View {
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .background(backgroundGradient)
         .sheet(isPresented: $showingSettings) {
-            SettingsView(store: store)
+            SettingsView(store: store, updater: updater)
         }
         .task {
             focusedField = .body
@@ -272,5 +273,5 @@ private struct MemoEditorBackground: View {
 }
 
 #Preview {
-    ContentView(store: MemoStore.preview)
+    ContentView(store: MemoStore.preview, updater: AppUpdater())
 }
