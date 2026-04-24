@@ -4,6 +4,7 @@ struct SettingsView: View {
     @Bindable var store: MemoStore
     @ObservedObject var updater: AppUpdater
     @Environment(\.dismiss) private var dismiss
+    private let appVersion = Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "Unknown"
 
     var body: some View {
         VStack(alignment: .leading, spacing: 22) {
@@ -58,6 +59,10 @@ struct SettingsView: View {
             VStack(alignment: .leading, spacing: 10) {
                 Text("Updates")
                     .font(.headline)
+
+                Text("Current version: \(appVersion)")
+                    .font(.subheadline)
+                    .foregroundStyle(.secondary)
 
                 Button("Check for Updates") {
                     updater.checkForUpdates()
