@@ -34,14 +34,14 @@ if [[ -z "$VERSION" ]]; then
   exit 1
 fi
 
-GENERATE_APPCAST="$(find_generate_appcast)"
-
 ARCHIVES_DIR="$ROOT_DIR/docs/updates"
 ARCHIVE_NAME="$APP_NAME $VERSION.zip"
 ARCHIVE_PATH="$ARCHIVES_DIR/$ARCHIVE_NAME"
 RELEASE_NOTES_PATH="$ARCHIVES_DIR/$APP_NAME $VERSION.md"
 
 "$ROOT_DIR/scripts/package_release.sh" "$VERSION"
+
+GENERATE_APPCAST="$(find_generate_appcast)"
 
 mkdir -p "$ARCHIVES_DIR"
 cp "$ROOT_DIR/dist/$APP_NAME.zip" "$ARCHIVE_PATH"
