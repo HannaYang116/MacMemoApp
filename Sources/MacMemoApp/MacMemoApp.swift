@@ -15,7 +15,7 @@ struct MacMemoApp: App {
         .defaultSize(width: 900, height: 640)
         .onChange(of: scenePhase) { _, newPhase in
             if newPhase != .active {
-                store.save()
+                store.saveAllMemos()
             }
         }
 
