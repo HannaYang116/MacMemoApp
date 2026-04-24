@@ -3,14 +3,38 @@ set -euo pipefail
 
 ROOT_DIR="$(cd "$(dirname "$0")/.." && pwd)"
 APP_NAME="MacMemoApp"
-SPARKLE_BIN_DIR="${SPARKLE_BIN_DIR:-$HOME/Library/Developer/Xcode/DerivedData/MacMemoApp-ewbdrxpszebiqaflvqvnmxbfjsiv/SourcePackages/artifacts/sparkle/Sparkle/bin}"
-GENERATE_APPCAST="$SPARKLE_BIN_DIR/generate_appcast"
 VERSION="${1:-}"
+
+find_generate_appcast() {
+  local candidates=()
+
+  if [[ -n "${SPARKLE_BIN_DIR:-}" ]]; then
+    candidates+=("$SPARKLE_BIN_DIR/generate_appcast")
+  fi
+
+  candidates+=(
+    "$ROOT_DIR/.xcodebuild/SourcePackages/artifacts/sparkle/Sparkle/bin/generate_appcast"
+    "$ROOT_DIR/.xcodebuild/SourcePackages/checkouts/Sparkle/generate_appcast"
+  )
+
+  for candidate in "${candidates[@]}"; do
+    if [[ -x "$candidate" ]]; then
+      echo "$candidate"
+      return 0
+    fi
+  done
+
+  echo "Could not find Sparkle generate_appcast tool." >&2
+  echo "Set SPARKLE_BIN_DIR to the folder containing generate_appcast if needed." >&2
+  return 1
+}
 
 if [[ -z "$VERSION" ]]; then
   echo "Usage: ./scripts/prepare_sparkle_release.sh <version>"
   exit 1
 fi
+
+GENERATE_APPCAST="$(find_generate_appcast)"
 
 ARCHIVES_DIR="$ROOT_DIR/docs/updates"
 ARCHIVE_NAME="$APP_NAME $VERSION.zip"
