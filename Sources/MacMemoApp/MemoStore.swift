@@ -1,21 +1,28 @@
+import AppKit
 import Foundation
 import Observation
+import UniformTypeIdentifiers
 
+@MainActor
 @Observable
 final class MemoStore {
     var text: String
     var lastSavedAt: Date?
     var errorMessage: String?
 
-    private let saveURL: URL
+    private let fileManager: FileManager
+    private var saveURL: URL
     private var pendingSaveTask: Task<Void, Never>?
+
+    private static let savePathDefaultsKey = "MacMemoApp.savePath"
 
     init(
         fileManager: FileManager = .default,
         initialText: String? = nil,
         saveURL: URL? = nil
     ) {
-        let resolvedURL = saveURL ?? MemoStore.makeSaveURL(fileManager: fileManager)
+        self.fileManager = fileManager
+        let resolvedURL = saveURL ?? MemoStore.loadSavedURL(fileManager: fileManager)
         self.saveURL = resolvedURL
 
         if let initialText {
@@ -44,19 +51,45 @@ final class MemoStore {
         return "Last saved \(lastSavedAt.formatted(date: .abbreviated, time: .shortened))"
     }
 
+    var saveLocation: String {
+        saveURL.path
+    }
+
+    var saveLocationDisplayName: String {
+        saveURL.lastPathComponent
+    }
+
     func scheduleSave() {
         pendingSaveTask?.cancel()
-        pendingSaveTask = Task { [weak self] in
+        errorMessage = nil
+        pendingSaveTask = Task { @MainActor [weak self] in
             try? await Task.sleep(for: .milliseconds(350))
             guard !Task.isCancelled else { return }
-            await self?.save()
+            self?.save()
         }
     }
 
-    @MainActor
+    func chooseSaveLocation() {
+        let panel = NSSavePanel()
+        panel.title = "Choose where to save your memo"
+        panel.message = "MacMemoApp will keep saving to the file you choose."
+        panel.canCreateDirectories = true
+        panel.isExtensionHidden = false
+        panel.allowedContentTypes = [UTType.plainText]
+        panel.nameFieldStringValue = saveURL.lastPathComponent
+        panel.directoryURL = saveURL.deletingLastPathComponent()
+
+        guard panel.runModal() == .OK, let selectedURL = panel.url else {
+            return
+        }
+
+        changeSaveLocation(to: selectedURL)
+    }
+
     func save() {
         do {
-            try FileManager.default.createDirectory(
+            pendingSaveTask?.cancel()
+            try fileManager.createDirectory(
                 at: saveURL.deletingLastPathComponent(),
                 withIntermediateDirectories: true
             )
@@ -68,7 +101,21 @@ final class MemoStore {
         }
     }
 
-    private static func makeSaveURL(fileManager: FileManager) -> URL {
+    private func changeSaveLocation(to newURL: URL) {
+        saveURL = newURL
+        UserDefaults.standard.set(newURL.path, forKey: Self.savePathDefaultsKey)
+        save()
+    }
+
+    private static func loadSavedURL(fileManager: FileManager) -> URL {
+        if let savedPath = UserDefaults.standard.string(forKey: savePathDefaultsKey), !savedPath.isEmpty {
+            return URL(fileURLWithPath: savedPath)
+        }
+
+        return makeDefaultSaveURL(fileManager: fileManager)
+    }
+
+    private static func makeDefaultSaveURL(fileManager: FileManager) -> URL {
         let appSupport = fileManager.urls(for: .applicationSupportDirectory, in: .userDomainMask).first
             ?? URL(fileURLWithPath: NSTemporaryDirectory())
 
