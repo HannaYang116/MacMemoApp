@@ -2,13 +2,15 @@
 set -euo pipefail
 
 ROOT_DIR="$(cd "$(dirname "$0")/.." && pwd)"
+source "$ROOT_DIR/scripts/versioning.sh"
+
 APP_NAME="MacMemoApp"
 DIST_DIR="$ROOT_DIR/dist"
 DERIVED_DATA_DIR="$ROOT_DIR/.xcodebuild"
 APP_DIR="$DIST_DIR/$APP_NAME.app"
 BUILT_APP_DIR="$DERIVED_DATA_DIR/Build/Products/Release/$APP_NAME.app"
-MARKETING_VERSION="${MARKETING_VERSION:-1.0.0}"
-CURRENT_PROJECT_VERSION="${CURRENT_PROJECT_VERSION:-100}"
+MARKETING_VERSION="${MARKETING_VERSION:-$(read_version_setting MARKETING_VERSION "$(versioning_config_path "$ROOT_DIR")")}"
+CURRENT_PROJECT_VERSION="${CURRENT_PROJECT_VERSION:-$(read_version_setting CURRENT_PROJECT_VERSION "$(versioning_config_path "$ROOT_DIR")")}"
 
 mkdir -p "$DIST_DIR"
 

@@ -44,7 +44,7 @@ To let other people download the app without setting up Swift or Xcode, use GitH
 This repo now includes a GitHub Actions workflow that:
 
 - builds `MacMemoApp.app`
-- packages it as `MacMemoApp.zip`
+- packages it as `MacMemoApp.dmg`
 - uploads it to a GitHub Release
 
 You can publish in two ways:
@@ -75,8 +75,10 @@ To prepare a Sparkle release locally:
 This will:
 
 - build the app with version metadata
-- create `dist/MacMemoApp.zip`
+- create `dist/MacMemoApp.dmg`
 - copy a versioned archive into `docs/updates/`
 - generate `docs/updates/appcast.xml`
+
+The DMG format is intentional here. Sparkle's documentation recommends distributing website downloads as a signed and notarized DMG because ZIP downloads can trigger app translocation, which blocks in-place updates. After users drag the app out of the DMG in Finder, they can keep it in any writable folder, not only `/Applications`.
 
 For GitHub Actions releases, add a repository secret named `SPARKLE_PRIVATE_KEY` containing your exported Sparkle private key. Without this secret, appcast signing will not work in CI.

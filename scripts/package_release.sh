@@ -2,25 +2,33 @@
 set -euo pipefail
 
 ROOT_DIR="$(cd "$(dirname "$0")/.." && pwd)"
+source "$ROOT_DIR/scripts/versioning.sh"
+
 APP_NAME="MacMemoApp"
 DIST_DIR="$ROOT_DIR/dist"
 APP_DIR="$DIST_DIR/$APP_NAME.app"
-ZIP_PATH="$DIST_DIR/$APP_NAME.zip"
-VERSION="${1:-${MARKETING_VERSION:-1.0.0}}"
+DMG_PATH="$DIST_DIR/$APP_NAME.dmg"
+DEFAULT_MARKETING_VERSION="$(read_version_setting MARKETING_VERSION "$(versioning_config_path "$ROOT_DIR")")"
+VERSION="${1:-${MARKETING_VERSION:-$DEFAULT_MARKETING_VERSION}}"
+STAGING_DIR="$(mktemp -d "$DIST_DIR/${APP_NAME}.dmg-staging.XXXXXX")"
 
-numeric_build_version() {
-  local input="$1"
-  local digits="${input//[^0-9]/}"
-  if [[ -z "$digits" ]]; then
-    digits="1"
-  fi
-  echo "$digits"
+cleanup() {
+  rm -rf "$STAGING_DIR"
 }
+
+trap cleanup EXIT
 
 MARKETING_VERSION="$VERSION" CURRENT_PROJECT_VERSION="$(numeric_build_version "$VERSION")" "$ROOT_DIR/scripts/build_app.sh"
 
-rm -f "$ZIP_PATH"
-ditto -c -k --sequesterRsrc --keepParent "$APP_DIR" "$ZIP_PATH"
+rm -f "$DMG_PATH"
+cp -R "$APP_DIR" "$STAGING_DIR/$APP_NAME.app"
+ln -s /Applications "$STAGING_DIR/Applications"
+
+hdiutil create \
+  -volname "$APP_NAME" \
+  -srcfolder "$STAGING_DIR" \
+  -format UDZO \
+  "$DMG_PATH" >/dev/null
 
 echo "Created release archive at:"
-echo "$ZIP_PATH"
+echo "$DMG_PATH"

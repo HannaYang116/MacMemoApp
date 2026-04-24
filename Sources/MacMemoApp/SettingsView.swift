@@ -74,6 +74,11 @@ struct SettingsView: View {
                 Text(updater.configurationMessage)
                     .font(.subheadline)
                     .foregroundStyle(.secondary)
+
+                Text(updater.installationMessage)
+                    .font(.footnote)
+                    .foregroundStyle(.secondary)
+                    .textSelection(.enabled)
             }
 
             Text("Your theme and line style are applied to the whole memo app immediately.")
