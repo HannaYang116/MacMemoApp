@@ -40,10 +40,17 @@ jobs:
             echo "tag=${{ github.event.inputs.release_tag }}" >> "$GITHUB_OUTPUT"
           fi
 
+      - name: Resolve release version
+        id: version
+        shell: bash
+        run: |
+          TAG="${{ steps.meta.outputs.tag }}"
+          echo "value=${TAG#v}" >> "$GITHUB_OUTPUT"
+
       - name: Prepare Sparkle release
         env:
           SPARKLE_PRIVATE_KEY: ${{ secrets.SPARKLE_PRIVATE_KEY }}
-        run: ./scripts/prepare_sparkle_release.sh "${{ steps.meta.outputs.tag#v }}"
+        run: ./scripts/prepare_sparkle_release.sh "${{ steps.version.outputs.value }}"
 
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v2
